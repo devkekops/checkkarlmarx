@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js" integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        html, body {height: 100%;}
+        .container {height: 100% }
+        pre {
+            overflow-x:auto;
+        }
+        table {
+            table-layout: fixed;
+            width: 100%;
+        }
+        .table > thead > tr > th
+        {
+            border-top: 1px solid #5bc0de;
+            border-bottom: 1px solid #5bc0de;
+        }
+        .table > tbody > tr > th,
+        .table > tfoot > tr > th,
+        .table > thead > tr > td,
+        .table > tbody > tr > td,
+        .table > tfoot > tr > td {
+            border-bottom: 1px solid #5bc0de;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <br>
+        <h1>CheckKarlMarx Report</h1>
+        <br>
+        <div class="card border-info mb-3" id="card">
+            <div class="card-header" id="packageInfo">File: <b>{{ result.filename }}</b> Package Id: <b>{{ result.packageId }}</b></div>
+            <div class="card-body text-info">
+                <p class="card-text" id="os">OS: <b>{{ result.os }}</b>  Version: <b>{{ result.packageVersion }}</b>  Code Version: <b>{{ result.packageCodeVersion }}</b></p>
+                <p class="card-text" id="firebase">Firebase URL: <b>{{ result.firebaseDatabaseUrl }}</b>
+                <p class="cart-text" id="summary">Summary: <b>Major: {{ result.summary['Major'] }} Normal: {{ result.summary['Normal'] }} Minor: {{ result.summary['Minor'] }} Info: {{ result.summary['Info'] }}</b></p>
+                <p class="card-text" id="time">Start Time: <b>{{ result.startTime.strftime("%d/%m/%Y, %H:%M:%S") }}</b>  Time: <b>{{ result.time }}</b></p>
+            </div>
+        </div>
+
+        <br>
+
+        <ul class="nav nav-tabs" id="nav1">
+            <li class="nav-item">
+                <a class="nav-link active" data-toggle="tab" href="#network">Network</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-toggle="tab" href="#urls">URLs</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-toggle="tab" href="#keys">Keys</a>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="network">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th style='width: 2%'>#</th>
+                            <th style='width: 18%'>Name</th>
+                            <th style='width: 7%'>Severity</th>
+                            <th style='width: 5%'>Found</th>
+                            <th style='width: 44%'>Proofs</th>
+                            <th style='width: 24%'>Info</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {%  for check in result.checks['network'] %}
+                        <tr>
+                            <td> {{ loop.index }} </td>
+                            <td> {{ check.name }} </td>
+                            <td> {{ check.severity }} </td>
+                            <td> {{ check.found }} </td>
+                            <td><pre> {{ check.proofs|safe }} </pre></td>
+                            <td> {{ check.info|safe }} </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="tab-pane fade" id="urls">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th style='width: 2%'>#</th>
+                            <th style='width: 18%'>Name</th>
+                            <th style='width: 7%'>Severity</th>
+                            <th style='width: 5%'>Found</th>
+                            <th style='width: 44%'>Proofs</th>
+                            <th style='width: 24%'>Info</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {%  for check in result.checks['urls'] %}
+                        <tr>
+                            <td> {{ loop.index }} </td>
+                            <td> {{ check.name }} </td>
+                            <td> {{ check.severity }} </td>
+                            <td> {{ check.found }} </td>
+                            <td><pre> {{ check.proofs|safe }} </pre></td>
+                            <td> {{ check.info|safe }} </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="tab-pane fade" id="keys">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th style='width: 2%'>#</th>
+                            <th style='width: 18%'>Name</th>
+                            <th style='width: 7%'>Severity</th>
+                            <th style='width: 5%'>Found</th>
+                            <th style='width: 44%'>Proofs</th>
+                            <th style='width: 24%'>Info</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {%  for check in result.checks['keys'] %}
+                            <tr>
+                                <td> {{ loop.index }} </td>
+                                <td> {{ check.name }} </td>
+                                <td> {{ check.severity }} </td>
+                                <td> {{ check.found }} </td>
+                                <td><pre> {{ check.proofs|safe }} </pre></td>
+                                <td> {{ check.info|safe }} </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
