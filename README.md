@@ -1,6 +1,8 @@
 CheckKarlMarx
 =========================================
 
+<img width="1586" alt="report" src="https://user-images.githubusercontent.com/82981657/123410858-734c2180-d5b8-11eb-900d-99cce750b105.png">
+
 Automated tool for security checking mobile app release binaries (apk, ipa). 
 CheckKarlMarx good at finding several things:
 * network misconfigurations
