@@ -12,37 +12,49 @@ from bs4 import BeautifulSoup
 from jinja2 import FileSystemLoader, Environment
 from html import escape
 from urllib.parse import urlparse
+import sarif_om as om
+from jschema_to_python.to_json import to_json
+import pathlib
+from urllib.parse import quote
 
 AAPTPATH = './build-tools/android-10/aapt'
 APKTOOL = 'apktool.jar'
 MOUNTDIR = '/mount/'
 
+TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+
 APK = 'apk'
 ALLOWED_EXTS = ['apk', 'ipa']
 ANDROID = "android"
 IOS = "ios"
+ALL = "all"
 
 FIREBASEDATABASEURL = r'https:\/\/(?:.+?)\.firebaseio.com'
 NSANDROIDURI = 'http://schemas.android.com/apk/res/android'
-TRUSTANCHORS = b'trust-anchors'
+TRUSTANCHORS = b'<trust-anchors'
 CLEARTEXTTRAFFICPERMITTED = b'cleartextTrafficPermitted'
 DISABLESAFEBROWSING = b'<meta-data android:name="android.webkit.WebView.EnableSafeBrowsing" android:value="false"/>'
-USESCLEARTEXTTRAFFIC = b'android:usesCleartextTraffic="true"'
 NSAPPTRANSPORTSECURITY = 'NSAppTransportSecurity'
 NSALLOWSARBITRARYLOADS = 'NSAllowsArbitraryLoads'
+NSALLOWSARBITRARYLOADSBIN = b'NSAllowsArbitraryLoads'
 NSALLOWSARBITRARYLOADSFORMEDIA = 'NSAllowsArbitraryLoadsForMedia'
+NSALLOWSARBITRARYLOADSFORMEDIABIN = b'NSAllowsArbitraryLoadsForMedia'
 NSALLOWSARBITRARYLOADSINWEBCONTENT = 'NSAllowsArbitraryLoadsInWebContent'
+NSALLOWSARBITRARYLOADSINWEBCONTENTBIN = b'NSAllowsArbitraryLoadsInWebContent'
 NSALLOWSLOCALNETWORKING = 'NSAllowsLocalNetworking'
+NSALLOWSLOCALNETWORKINGBIN = b'NSAllowsLocalNetworking'
 NSEXCEPTIONDOMAINS = 'NSExceptionDomains'
+NSEXCEPTIONDOMAINSBIN = b'NSExceptionDomains'
 
 EXTSLIST = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.bmp', '.webp', '.bmp', '.eot', '.otf', '.ttf', '.woff', '.woff2', '.so', '.proto', '.zip']
 
 URLS = rb'(?:http|ws)[s]?:\/\/(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
 ANDROIDBLACKLISTURLS = [b'schemas.android.com', b'www.apache.org', b'www.w3.org', b'schema.org',
                  b'www.obj-sys.com', b'ns.adobe.com', b'xml.org', b'xmlpull.org', b'xml.apache.org',
-                 b'java.sun.com/', b'www.apple.com/DTDs', b'developer.android.com', b'developers.google.com/', b'developer.mozilla.org']
+                 b'java.sun.com/', b'www.apple.com/DTDs', b'developer.android.com', b'developers.google.com/', b'developer.mozilla.org',
+                        b'www.unicode.org']
 IOSBLACKLISTURLS = [b'www.apple.com', b'ocsp.apple.com', b'crl.apple.com', b'ocsp.comodoca.com', b'ns.adobe.com',
-                    b'www.apache.org', b'www.w3.org', b'itunes', b'www.webrtc.org']
+                    b'www.apache.org', b'www.w3.org', b'itunes', b'www.webrtc.org', b'www.unicode.org']
 BASICAUTH = r'^(?:.+?\/\/)(?:.+?):(?:.+?)@(?:.+)$'
 QATAGS = ['qa', 'test', 'dev', 'uat', 'stage']
 
@@ -58,81 +70,41 @@ SETALLOWFILEACCESSFROMFILEURLS = b'setAllowFileAccessFromFileURLs'
 SETALLOWUNIVERSALACCESSFORMFILEURLS = b'setAllowUniversalAccessFromFileURLs'
 ADDJAVASCRIPTINTERFACE = b'addJavascriptInterface'
 
-CHECKSINFO = {'NSC CustomTrustedCAs': {'tag': 'network', 'severity': 'Normal', 'info': 'Additional trust anchors in Network Security Config:\n<a target="_blank" href = "https://developer.android.com/training/articles/security-config#manifest">Add a Network Security Configuration file</a>\n<a target="_blank" href="https://developer.android.com/training/articles/security-config#ConfigCustom">Configure a custom CA</a>'},
-              'NSC CleartextTraffic': {'tag': 'network', 'severity': 'Normal', 'info': 'Allow using the unencrypted HTTP protocol instead of HTTPS in Network Security Config:\n<a target="_blank" href = "https://developer.android.com/training/articles/security-config#manifest">Add a Network Security Configuration file</a>\n<a target="_blank" href = "https://developer.android.com/training/articles/security-config#CleartextTrafficPermitted">Opt out of cleartext traffic</a>'},
-              'Uses CleartextTraffic': {'tag': 'network', 'severity': 'Normal', 'info': 'Indicates whether the app intends to use cleartext network traffic, such as cleartext HTTP:\n<a target="_blank" href = "https://developer.android.com/guide/topics/manifest/application-element#usesCleartextTraffic">usesCleartextTraffic</a>'},
+CHECKS = [{'id': '0', 'name': 'NSC CustomTrustedCAs', 'os': 'android', 'tag': 'network', 'severity': 'Normal', 'info': 'Additional trust anchors in Network Security Config:\n<a target="_blank" href = "https://developer.android.com/training/articles/security-config#manifest">Add a Network Security Configuration file</a>\n<a target="_blank" href="https://developer.android.com/training/articles/security-config#ConfigCustom">Configure a custom CA</a>'},
+          {'id': '1', 'name': 'NSC CleartextTraffic', 'os': 'android', 'tag': 'network', 'severity': 'Normal', 'info': 'Allow using the unencrypted HTTP protocol instead of HTTPS in Network Security Config:\n<a target="_blank" href = "https://developer.android.com/training/articles/security-config#manifest">Add a Network Security Configuration file</a>\n<a target="_blank" href = "https://developer.android.com/training/articles/security-config#CleartextTrafficPermitted">Opt out of cleartext traffic</a>'},
+          {'id': '2', 'name': 'Exported Activities', 'os': 'android', 'tag': 'components', 'severity': 'Info', 'info': 'Activities exported to other applications'},
+          {'id': '3', 'name': 'Exported Receivers', 'os': 'android', 'tag': 'components', 'severity': 'Info', 'info': 'Receivers exported to other applications'},
+          {'id': '4', 'name': 'Exported Services', 'os': 'android', 'tag': 'components', 'severity': 'Info', 'info': 'Services exported to other applications'},
+          {'id': '5', 'name': 'Exported Providers', 'os': 'android', 'tag': 'components', 'severity': 'Info', 'info': 'Providers exported to other applications'},
+          {'id': '6', 'name': 'Disabled SafeBrowsing', 'os': 'android', 'tag': 'webview', 'severity': 'Minor', 'info': 'EnableSafeBrowsing set to "false" in manifest allow open potentially unsafe websites in all WebViews:\n<a target="_blank" href = "https://developer.android.com/guide/webapps/managing-webview#safe-browsing">Google Safe Browsing Service</a>'},
 
-              'Exported Activities': {'tag': 'components', 'severity': 'Info', 'info': 'Activities exported to other applications'},
-              'Exported Receivers': {'tag': 'components', 'severity': 'Info', 'info': 'Receivers exported to other applications'},
-              'Exported Services': {'tag': 'components', 'severity': 'Info', 'info': 'Services exported to other applications'},
-              'Exported Providers': {'tag': 'components', 'severity': 'Info', 'info': 'Providers exported to other applications'},
-              'Disabled SafeBrowsing': {'tag': 'webview', 'severity': 'Minor', 'info': 'EnableSafeBrowsing set to "false" in manifest allow open potentially unsafe websites in all WebViews:\n<a target="_blank" href = "https://developer.android.com/guide/webapps/managing-webview#safe-browsing">Google Safe Browsing Service</a>'},
+          {'id': '7', 'name': 'NS Allows Arbitrary Loads', 'os': 'ios', 'tag': 'network', 'severity': 'Normal', 'info': 'Disable ATS restrictions globally excepts for individual domains specified under NSExceptionDomains'},
+          {'id': '8', 'name': 'NS Allows Arbitrary Loads For Media', 'os': 'ios', 'tag': 'network', 'severity': 'Normal', 'info': 'Disable all ATS restrictions for media loaded through the AV Foundations framework'},
+          {'id': '9', 'name': 'NS Allows Arbitrary Loads In Web Content',  'os': 'ios', 'tag': 'network', 'severity': 'Normal', 'info': 'Disable ATS restrictions for all the connections made from web views'},
+          {'id': '10', 'name': 'NS Allows Local Networking', 'os': 'ios', 'tag': 'network', 'severity': 'Normal', 'info': 'Allow connection to unqualified domain names and .local domains'},
+          {'id': '11', 'name': 'NS Exception Domains', 'os': 'ios', 'tag': 'network', 'severity': 'Normal', 'info': 'NS Exception Domains'},
 
-              'NS Allows Arbitrary Loads': {'tag': 'network', 'severity': 'Normal', 'info': 'Disable ATS restrictions globally excepts for individual domains specified under NSExceptionDomains'},
-              'NS Allows Arbitrary Loads For Media': {'tag': 'network', 'severity': 'Normal', 'info': 'Disable all ATS restrictions for media loaded through the AV Foundations framework'},
-              'NS Allows Arbitrary Loads In Web Content': {'tag': 'network', 'severity': 'Normal', 'info': 'Disable ATS restrictions for all the connections made from web views'},
-              'NS Allows Local Networking': {'tag': 'network', 'severity': 'Normal', 'info': 'Allow connection to unqualified domain names and .local domains'},
-              'NS Exception Domains': {'tag': 'network', 'severity': 'Normal', 'info': 'NS Exception Domains'},
+          {'id': '12', 'name': 'Basic Auth URLs', 'os': 'all', 'tag': 'urls', 'severity':'Major', 'info': 'URLs with basic credentials: https://username:password@example.com'},
+          {'id': '13', 'name': 'Http Insecure URLs', 'os': 'all', 'tag': 'urls', 'severity': 'Minor', 'info': 'Http URLs starts with http://'},
+          {'id': '14', 'name': 'WS Insecure URLs', 'os': 'all', 'tag': 'urls', 'severity': 'Minor', 'info': 'WebSocket URLs starts with ws://'},
+          {'id': '15', 'name': 'QA URLs', 'os': 'all', 'tag': 'urls', 'severity': 'Minor', 'info': 'Http and WebSocket URLs contains qa tags (e.g. qa, test, dev, uat, stage)'},
 
-              'Basic Auth URLs': {'tag': 'urls', 'severity':'Major', 'info': 'URLs with basic credentials: https://username:password@example.com'},
-              'Http Insecure URLs': {'tag': 'urls', 'severity': 'Minor', 'info': 'Http URLs starts with http://'},
-              'WS Insecure URLs': {'tag': 'urls', 'severity': 'Minor', 'info': 'WebSocket URLs starts with ws://'},
-              'QA URLs': {'tag': 'urls', 'severity': 'Minor', 'info': 'Http and WebSocket URLs contains qa tags (e.g. qa, test, dev, uat, stage, etc)'},
+          {'id': '16', 'name': 'Private Keys', 'os': 'all', 'tag': 'keys', 'severity': 'Major', 'pattern': PRIVATEKEY, 'info': 'Asymmetric Private RSA/EC/DSA/PGP/OPENSSH Keys'},
+          {'id': '17', 'name': 'FCM Server Key', 'os': 'all', 'tag': 'keys', 'severity': 'Major', 'pattern': FCMSERVERKEY, 'info': 'Authorization key for FCM SDK: <a target="blank" href="https://abss.me/posts/fcm-takeover/">Firebase Cloud Messaging Service Takeover</a>'}, #example: AAAAODDc_Do:APA91bG5kQSzauxg1GSrq3eot5GUPyfouZ5KZObtBUpdM0xoxWGCulSPK1FIKan3IIBK-YlrkOcXkIo0kv7NlUFSOV54Qdy21z9czkFBoe6dMxBEEKAAD8KlC3LYuDugRdrMXJr1ggsL
+          {'id': '18','name': 'Google Api Key', 'os': 'all', 'tag': 'keys', 'severity': 'Info', 'pattern': GOOGLEAPIKEY, 'info': 'Google API Key, Legacy FCM server Key: <a target="blank" href="https://abss.me/posts/fcm-takeover/">Firebase Cloud Messaging Service Takeover</a>'}, #example: AIzaSyDIw1n6tfz8_ANZVXJLRuBQrX-7culIFHM
 
-              'Private Keys': {'tag': 'keys', 'severity': 'Major', 'pattern': PRIVATEKEY, 'info': 'Asymmetric Private RSA/EC/DSA/PGP/OPENSSH Keys'},
-              'FCM Server Key': {'tag': 'keys', 'severity': 'Major', 'pattern': FCMSERVERKEY, 'info': 'Authorization key for FCM SDK: <a target="blank" href="https://abss.me/posts/fcm-takeover/">Firebase Cloud Messaging Service Takeover</a>'}, #example: AAAAODDc_Do:APA91bG5kQSzauxg1GSrq3eot5GUPyfouZ5KZObtBUpdM0xoxWGCulSPK1FIKan3IIBK-YlrkOcXkIo0kv7NlUFSOV54Qdy21z9czkFBoe6dMxBEEKAAD8KlC3LYuDugRdrMXJr1ggsL
-              'Google Api Key': {'tag': 'keys', 'severity': 'Info', 'pattern': GOOGLEAPIKEY, 'info': 'Google API Key, Legacy FCM server Key: <a target="blank" href="https://abss.me/posts/fcm-takeover/">Firebase Cloud Messaging Service Takeover</a>'}, #example: AIzaSyDIw1n6tfz8_ANZVXJLRuBQrX-7culIFHM
-
-              'Should Override Url Loadings': {'tag': 'webview', 'severity': 'Info', 'pattern': SHOULDOVERRIDEURLLOADING, 'info': 'Allow open 3rd party links in WebView instead of browser:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebViewClient#shouldOverrideUrlLoading(android.webkit.WebView,%20android.webkit.WebResourceRequest)">shouldOverrideUrlLoading</a>'},
-              'Set JavaScript Enabled': {'tag': 'webview', 'severity': 'Info', 'pattern': SETJAVASCRIPTENABLED, 'info': 'Tells the WebView to enable JavaScript execution:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebSettings#setJavaScriptEnabled(boolean)">setJavascriptEnabled</a>'},
-              'Set Allow File Access': {'tag': 'webview', 'severity': 'Info', 'pattern': SETALLOWFILEACCESS, 'info': 'Enables or disables file access within WebView:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebSettings#setAllowFileAccess(boolean)">setAllowFileAccess</a>'},
-              'Set Allow Content Access': {'tag': 'webview', 'severity': 'Info', 'pattern': SETALLOWCONTENTACCESS, 'info': 'Enables or disables content URL access within WebView:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebSettings#setAllowContentAccess(boolean)">setAllowContentAccess</a>'},
-              'Set Allow File Access From File URLs': {'tag': 'webview', 'severity': 'Info', 'pattern': SETALLOWFILEACCESSFROMFILEURLS, 'info': 'Sets whether cross-origin requests in the context of a file scheme URL should be allowed to access content from other file scheme URLs:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebSettings#setAllowFileAccessFromFileURLs(boolean)">setAllowFileAccessFromFileURLs</a>'},
-              'Set Allow Universal Access From File URLs': {'tag': 'webview', 'severity': 'Info', 'pattern': SETALLOWUNIVERSALACCESSFORMFILEURLS, 'info': 'Sets whether cross-origin requests in the context of a file scheme URL should be allowed to access content from any origin:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebSettings#setAllowUniversalAccessFromFileURLs(boolean)">setAllowUniversalAccessFromFileURLs</a>'},
-              'Add Javascript Interface': {'tag': 'webview', 'severity': 'Info', 'pattern': ADDJAVASCRIPTINTERFACE, 'info': 'Injects the supplied Java object into this WebView:\n<a target="blank" href="https://developer.android.com/reference/android/webkit/WebView#addJavascriptInterface(java.lang.Object,%20java.lang.String)">addJavascriptInterface</a>'}
-              }
-
-ANDROIDCHECKS = ['NSC CustomTrustedCAs',
-                 'NSC CleartextTraffic',
-                 'Uses CleartextTraffic',
-                 'Disabled SafeBrowsing',
-                 'Exported Activities',
-                 'Exported Receivers',
-                 'Exported Services',
-                 'Exported Providers',
-                 'Basic Auth URLs',
-                 'Http Insecure URLs',
-                 'WS Insecure URLs',
-                 'QA URLs',
-                 'Private Keys',
-                 'FCM Server Key',
-                 'Google Api Key',
-                 'Should Override Url Loadings',
-                 'Set JavaScript Enabled',
-                 'Set Allow File Access',
-                 'Set Allow Content Access',
-                 'Set Allow File Access From File URLs',
-                 'Set Allow Universal Access From File URLs',
-                 'Add Javascript Interface'
-                 ]
-
-IOSCHECKS = ['NS Allows Arbitrary Loads',
-             'NS Allows Arbitrary Loads For Media',
-             'NS Allows Arbitrary Loads In Web Content',
-             'NS Allows Local Networking',
-             'NS Exception Domains',
-             'Basic Auth URLs',
-             'Http Insecure URLs',
-             'WS Insecure URLs',
-             'QA URLs',
-             'Private Keys',
-             'FCM Server Key',
-             'Google Api Key',
-             ]
+          {'id': '19', 'name': 'Should Override Url Loadings', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': SHOULDOVERRIDEURLLOADING, 'info': 'Allow open 3rd party links in WebView instead of browser:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebViewClient#shouldOverrideUrlLoading(android.webkit.WebView,%20android.webkit.WebResourceRequest)">shouldOverrideUrlLoading</a>'},
+          {'id': '20', 'name': 'Set JavaScript Enabled', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': SETJAVASCRIPTENABLED, 'info': 'Tells the WebView to enable JavaScript execution:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebSettings#setJavaScriptEnabled(boolean)">setJavascriptEnabled</a>'},
+          {'id': '21', 'name': 'Set Allow File Access', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': SETALLOWFILEACCESS, 'info': 'Enables or disables file access within WebView:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebSettings#setAllowFileAccess(boolean)">setAllowFileAccess</a>'},
+          {'id': '22', 'name': 'Set Allow Content Access', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': SETALLOWCONTENTACCESS, 'info': 'Enables or disables content URL access within WebView:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebSettings#setAllowContentAccess(boolean)">setAllowContentAccess</a>'},
+          {'id': '23', 'name': 'Set Allow File Access From File URLs', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': SETALLOWFILEACCESSFROMFILEURLS, 'info': 'Sets whether cross-origin requests in the context of a file scheme URL should be allowed to access content from other file scheme URLs:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebSettings#setAllowFileAccessFromFileURLs(boolean)">setAllowFileAccessFromFileURLs</a>'},
+          {'id': '24', 'name': 'Set Allow Universal Access From File URLs', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': SETALLOWUNIVERSALACCESSFORMFILEURLS, 'info': 'Sets whether cross-origin requests in the context of a file scheme URL should be allowed to access content from any origin:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebSettings#setAllowUniversalAccessFromFileURLs(boolean)">setAllowUniversalAccessFromFileURLs</a>'},
+          {'id': '25', 'name': 'Add Javascript Interface', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': ADDJAVASCRIPTINTERFACE, 'info': 'Injects the supplied Java object into this WebView:\n<a target="blank" href="https://developer.android.com/reference/android/webkit/WebView#addJavascriptInterface(java.lang.Object,%20java.lang.String)">addJavascriptInterface</a>'}
+              ]
 
 class Audit:
     def __init__(self, startTime, os, filename, filepath, folderpath, checks, domains=None, packages=None, packageId=None, packageVersion=None, packageCodeVersion=None, firebaseDatabaseUrl = None,
-                 time=None, summary=None, nameToIdMap=None):
+                 time=None, summary=None, nameToIndexMap=None):
         self.startTime = startTime
         self.os = os
         self.filename = filename
@@ -147,7 +119,7 @@ class Audit:
         self.firebaseDatabaseUrl = firebaseDatabaseUrl
         self.time = time
         self.summary = summary
-        self.nameToIdMap = nameToIdMap
+        self.nameToIndexMap = nameToIndexMap
 
     def setPackageId(self, value):
         self.packageId = value
@@ -165,13 +137,14 @@ class Audit:
         self.time = value
 
     def setFoundForName(self, name, found):
-        self.checks[self.nameToIdMap[name]].setFound(found)
+        self.checks[self.nameToIndexMap[name]].setFound(found)
 
     def setProofsForName(self, name, proofs):
-        self.checks[self.nameToIdMap[name]].setProofs(proofs)
+        self.checks[self.nameToIndexMap[name]].setProofs(proofs)
 
 class Check:
-    def __init__(self, name, tag=None, severity=None, pattern=None, found=None, proofs=None, info=None):
+    def __init__(self, id, name, tag=None, severity=None, pattern=None, found=None, proofs=None, info=None):
+        self.id = id
         self.name = name
         self.tag = tag
         self.severity = severity
@@ -280,9 +253,10 @@ def auditManifest(audit):
                         haveTrustAnchors = True
 
         if haveTrustAnchors:
+            trustAnchors = grepBinary(nscconfigpath, TRUSTANCHORS)
             nscconfig = open(nscconfigpath, "r").read()
             audit.setFoundForName('NSC CustomTrustedCAs', 'yes')
-            audit.setProofsForName('NSC CustomTrustedCAs', json.dumps(nscEntry, sort_keys = True, indent = 4) + '\n' + escape(nscconfig) + ":\n" + nscconfigpath)
+            audit.setProofsForName('NSC CustomTrustedCAs', [nscEntry, {nscconfig: list(trustAnchors.values())[0]}]) #json.dumps(nscEntry, sort_keys = True, indent = 4) + '\n' + escape(nscconfig) + ":\n" + nscconfigpath)
 
         #https://developer.android.com/training/articles/security-config#CleartextTrafficPermitted
         cleartextTraffic = grepBinary(nscconfigpath, CLEARTEXTTRAFFICPERMITTED)
@@ -290,16 +264,7 @@ def auditManifest(audit):
         if cleartextTraffic:
             nscconfig = open(nscconfigpath, "r").read()
             audit.setFoundForName('NSC CleartextTraffic', 'yes')
-            audit.setProofsForName('NSC CleartextTraffic', json.dumps(nscEntry, sort_keys = True, indent = 4) + '\n' + escape(nscconfig) + ":\n" + nscconfigpath)
-
-
-    #https://developer.android.com/guide/topics/manifest/application-element#usesCleartextTraffic
-    if '{http://schemas.android.com/apk/res/android}usesCleartextTraffic' in appAttrs:
-        if appAttrs['{http://schemas.android.com/apk/res/android}usesCleartextTraffic'] == 'true':
-            usesCleartextTrafficEntry = grepBinary(manifestpath, USESCLEARTEXTTRAFFIC)
-            audit.setFoundForName('Uses CleartextTraffic', 'yes')
-            audit.setProofsForName('Uses CleartextTraffic', json.dumps(usesCleartextTrafficEntry, sort_keys= True, indent = 4))
-
+            audit.setProofsForName('NSC CleartextTraffic', [nscEntry, {nscconfig: list(cleartextTraffic.values())[0]}]) #json.dumps(nscEntry, sort_keys = True, indent = 4) + '\n' + escape(nscconfig) + ":\n" + nscconfigpath)
 
     appMetaDatas = app.findall('meta-data')
     disableSafeBrowsing = False
@@ -321,45 +286,45 @@ def auditManifest(audit):
         soup = BeautifulSoup(mp, 'html.parser')
 
     if expComps['activity'] or expComps['activity-alias']:
-        proofs = ""
+        proofs = {}
         if expComps['activity']:
             for activityName in expComps['activity']:
                 tag = soup.find('activity', {"android:name": activityName})
-                proofs += tag.prettify() + ':' + grep(manifestpath, activityName)[activityName][0] + '\n\n'
+                proofs[tag.prettify()] = list(grep(manifestpath, activityName).values())[0]
         if expComps['activity-alias']:
             for activityAliasName in expComps['activity']:
                 tag = soup.find('activity', {"android:name": activityAliasName})
-                proofs += tag.prettify() + ':' + grep(manifestpath, activityAliasName)[activityAliasName][0] + '\n\n'
+                proofs[tag.prettify()] = list(grep(manifestpath, activityAliasName).values())[0]
 
         audit.setFoundForName('Exported Activities', 'yes')
-        audit.setProofsForName('Exported Activities', escape(proofs))
+        audit.setProofsForName('Exported Activities', proofs)
 
     if expComps['receiver']:
-        proofs = ""
+        proofs = {}
         for receiverName in expComps['receiver']:
             tag = soup.find('receiver', {"android:name": receiverName})
-            proofs += tag.prettify() + ':' + grep(manifestpath, receiverName)[receiverName][0] + '\n\n'
+            proofs[tag.prettify()] = list(grep(manifestpath, receiverName).values())[0]
 
         audit.setFoundForName('Exported Receivers', 'yes')
-        audit.setProofsForName('Exported Receivers', escape(proofs))
+        audit.setProofsForName('Exported Receivers', proofs)
 
     if expComps['service']:
-        proofs = ""
+        proofs = {}
         for serviceName in expComps['service']:
             tag = soup.find('service', {"android:name": serviceName})
-            proofs += tag.prettify() + ':' + grep(manifestpath, serviceName)[serviceName][0] + '\n\n'
+            proofs[tag.prettify()] = list(grep(manifestpath, serviceName).values())[0]
 
         audit.setFoundForName('Exported Services', 'yes')
-        audit.setProofsForName('Exported Services', escape(proofs))
+        audit.setProofsForName('Exported Services', proofs)
 
     if expComps['provider']:
-        proofs = ""
+        proofs = {}
         for providerName in expComps['provider']:
             tag = soup.find('provider', {"android:name": providerName})
-            proofs += tag.prettify() + ':' + grep(manifestpath, providerName)[providerName][0] + '\n\n'
+            proofs[tag.prettify()] = list(grep(manifestpath, providerName).values())[0]
 
         audit.setFoundForName('Exported Providers', 'yes')
-        audit.setProofsForName('Exported Providers', escape(proofs))
+        audit.setProofsForName('Exported Providers', proofs)
     mp.close()
 
 def auditInfoPlist(audit):
@@ -380,27 +345,32 @@ def auditInfoPlist(audit):
         if NSAPPTRANSPORTSECURITY in pl:
             if NSALLOWSARBITRARYLOADS in pl[NSAPPTRANSPORTSECURITY]:
                 if pl[NSAPPTRANSPORTSECURITY][NSALLOWSARBITRARYLOADS] is True:
+                    entry = grepBinary(infoPlistPath, NSALLOWSARBITRARYLOADSBIN)
                     audit.setFoundForName('NS Allows Arbitrary Loads', 'yes')
-                    audit.setProofsForName('NS Allows Arbitrary Loads', json.dumps(pl[NSAPPTRANSPORTSECURITY], sort_keys = True, indent = 4) + ":\n" + infoPlistPath)
+                    audit.setProofsForName('NS Allows Arbitrary Loads', {json.dumps(pl[NSAPPTRANSPORTSECURITY], sort_keys = True, indent = 4): list(entry.values())[0]}) #json.dumps(pl[NSAPPTRANSPORTSECURITY], sort_keys = True, indent = 4) + ":\n" + infoPlistPath)
 
             if NSALLOWSARBITRARYLOADSFORMEDIA in pl[NSAPPTRANSPORTSECURITY]:
                 if pl[NSAPPTRANSPORTSECURITY][NSALLOWSARBITRARYLOADSFORMEDIA] is True:
+                    entry = grepBinary(infoPlistPath, NSALLOWSARBITRARYLOADSFORMEDIABIN)
                     audit.setFoundForName('NS Allows Arbitrary Loads For Media', 'yes')
-                    audit.setProofsForName('NS Allows Arbitrary Loads For Media', json.dumps(pl[NSAPPTRANSPORTSECURITY], sort_keys = True, indent = 4) + ":\n" + infoPlistPath)
+                    audit.setProofsForName('NS Allows Arbitrary Loads For Media', {json.dumps(pl[NSAPPTRANSPORTSECURITY], sort_keys = True, indent = 4): list(entry.values())[0]}) #json.dumps(pl[NSAPPTRANSPORTSECURITY], sort_keys = True, indent = 4) + ":\n" + infoPlistPath)
 
             if NSALLOWSARBITRARYLOADSINWEBCONTENT in pl[NSAPPTRANSPORTSECURITY]:
                 if pl[NSAPPTRANSPORTSECURITY][NSALLOWSARBITRARYLOADSINWEBCONTENT] is True:
+                    entry = grepBinary(infoPlistPath, NSALLOWSARBITRARYLOADSINWEBCONTENTBIN)
                     audit.setFoundForName('NS Allows Arbitrary Loads In Web Content', 'yes')
-                    audit.setProofsForName('NS Allows Arbitrary Loads In Web Content', json.dumps(pl[NSAPPTRANSPORTSECURITY], sort_keys = True, indent = 4) + ":\n" + infoPlistPath)
+                    audit.setProofsForName('NS Allows Arbitrary Loads In Web Content', {json.dumps(pl[NSAPPTRANSPORTSECURITY], sort_keys = True, indent = 4): list(entry.values())[0]}) #json.dumps(pl[NSAPPTRANSPORTSECURITY], sort_keys = True, indent = 4) + ":\n" + infoPlistPath)
 
             if NSALLOWSLOCALNETWORKING in pl[NSAPPTRANSPORTSECURITY]:
                 if pl[NSAPPTRANSPORTSECURITY][NSALLOWSLOCALNETWORKING] is True:
+                    entry = grepBinary(infoPlistPath, NSALLOWSLOCALNETWORKINGBIN)
                     audit.setFoundForName('NS Allows Local Networking', 'yes')
-                    audit.setProofsForName('NS Allows Local Networking', json.dumps(pl[NSAPPTRANSPORTSECURITY], sort_keys = True, indent = 4) + ":\n" + infoPlistPath)
+                    audit.setProofsForName('NS Allows Local Networking', {json.dumps(pl[NSAPPTRANSPORTSECURITY], sort_keys = True, indent = 4): list(entry.values())[0]}) #json.dumps(pl[NSAPPTRANSPORTSECURITY], sort_keys = True, indent = 4) + ":\n" + infoPlistPath)
 
             if NSEXCEPTIONDOMAINS in pl[NSAPPTRANSPORTSECURITY]:
+                entry = grepBinary(infoPlistPath, NSEXCEPTIONDOMAINSBIN)
                 audit.setFoundForName('NS Exception Domains', 'yes')
-                audit.setProofsForName('NS Exception Domains', json.dumps(pl[NSAPPTRANSPORTSECURITY], sort_keys = True, indent = 4) + ":\n" + infoPlistPath)
+                audit.setProofsForName('NS Exception Domains', {json.dumps(pl[NSAPPTRANSPORTSECURITY], sort_keys = True, indent = 4): list(entry.values())[0]}) #json.dumps(pl[NSAPPTRANSPORTSECURITY], sort_keys = True, indent = 4) + ":\n" + infoPlistPath)
 
         fp.close()
 
@@ -782,8 +752,22 @@ def sortChecks(checks, result):
 
 def getHtmlReport(audit):
     for check in audit.checks:
-        if check.tag != 'network' and check.tag != 'components':
-            check.proofs = json.dumps(check.proofs, sort_keys = True, indent = 4)
+        if check.found == 'yes':
+            if audit.os == 'android':
+                if check.tag == 'network':
+                    check.proofs = json.dumps(check.proofs[0], sort_keys = True, indent = 4) + '\n' + escape(list(check.proofs[1].keys())[0]) + ":\n" + list(check.proofs[1].values())[0][0]
+                elif check.tag == 'components':
+                    proofs = ''
+                    for key, value in check.proofs.items():
+                        proofs += escape(key) + ':' + value[0] + '\n\n'
+                    check.proofs = proofs
+                else:
+                    check.proofs = json.dumps(check.proofs, sort_keys = True, indent = 4)
+            if audit.os == 'ios':
+                if check.tag == 'network':
+                    check.proofs = list(check.proofs.keys())[0] + ':\n' + list(check.proofs.values())[0][0]
+                else:
+                    check.proofs = json.dumps(check.proofs, sort_keys=True, indent=4)
 
     result = {'os': audit.os, 'filename': audit.filename, 'packageId': audit.packageId, 'packageVersion': audit.packageVersion,
                'packageCodeVersion': audit.packageCodeVersion, 'firebaseDatabaseUrl': audit.firebaseDatabaseUrl,
@@ -802,9 +786,107 @@ def getHtmlReport(audit):
 
     return template.render(result=result)
 
+def getSarifReport(audit):
+    log = om.SarifLog(
+        schema_uri="https://schemastore.azurewebsites.net/schemas/json/sarif-2.1.0-rtm.4.json",
+        version="2.1.0",
+        runs=[
+            om.Run(
+                tool=om.Tool(driver=om.ToolComponent(name="CheckKarlMarx")),
+                invocations=[
+                    om.Invocation(
+                        end_time_utc=datetime.utcnow().strftime(TS_FORMAT),
+                        execution_successful=True,
+                    )
+                ]
+            )
+        ],
+    )
+
+    run = log.runs[0]
+    add_results(audit, run)
+
+    serializedLog = to_json(log)
+    return serializedLog
+
+def add_results(audit, run):
+    if run.results is None:
+        run.results = []
+
+    rules = {}
+    rule_indices = {}
+    for check in audit.checks:
+        if check.found == 'yes':
+            if check.tag == 'network':
+                if audit.os == ANDROID:
+                    result = create_result(check.id, check.name, check.severity, check.info, list(check.proofs[1].keys())[0], list(check.proofs[1].values())[0][0], rules, rule_indices)
+                else:
+                    result = create_result(check.id, check.name, check.severity, check.info, list(check.proofs.keys())[0], list(check.proofs.values())[0][0], rules, rule_indices)
+                run.results.append(result)
+            else:
+                for key, value in check.proofs.items():
+                    for location in value:
+                        result = create_result(check.id, check.name, check.severity, check.info, key, location, rules, rule_indices)
+                        run.results.append(result)
+
+    if len(rules) > 0:
+        run.tool.driver.rules = list(
+            rules.values()
+        )
+
+def create_result(checkId, checkName, checkSeverity, checkInfo, key, location, rules, rule_indices):
+    rule, rule_index = create_or_find_rule(checkId, checkName, rules, rule_indices)
+
+    physical_location = om.PhysicalLocation(
+        artifact_location=om.ArtifactLocation(uri=to_uri(location.split(':')[0]))
+    )
+
+    physical_location.region = om.Region(
+        start_line=int(location.split(':')[1]), snippet=om.ArtifactContent(text=key)
+    )
+
+    return om.Result(
+        rule_id=checkId,
+        rule_index=rule_index,
+        message=om.Message(text=checkInfo),
+        level=level_from_severity(checkSeverity),
+        locations=[om.Location(physical_location=physical_location)],
+    )
+
+def create_or_find_rule(checkId, checkName, rules, rule_indices):
+    rule_id = checkId
+    if rule_id in rules:
+        return rules[rule_id], rule_indices[rule_id]
+
+    rule = om.ReportingDescriptor(
+        id=rule_id, name=checkName
+    )
+
+    index = len(rules)
+    rules[rule_id] = rule
+    rule_indices[rule_id] = index
+    return rule, index
+
+def to_uri(file_path):
+    pure_path = pathlib.PurePath(file_path)
+    if pure_path.is_absolute():
+        return pure_path.as_uri()
+    else:
+        posix_path = pure_path.as_posix()
+        return quote(posix_path)
+
+def level_from_severity(severity):
+    if severity == "Major" or severity == "Normal":
+        return "error"
+    elif severity == "Minor":
+        return "warning"
+    elif severity == "Info":
+        return "note"
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-o", "--output", nargs='?', default="report.html", const="report.html", help="output filename (report.html by default)")
+    parser.add_argument("-f", "--format", nargs='?', default="html", const="html", choices=['html', 'sarif'], help="report format: html or sarif")
+    parser.add_argument("-o", "--out", nargs='?', default="file", const="file", choices=['file', 'stdout'], help="print output to: file or stdout")
     parser.add_argument("-d", "--domains", nargs='*', help="domain list (e.g. example.com)")
     parser.add_argument("-q", "--qatags", nargs='*', help="test domain tags list")
     parser.add_argument("-p", "--packages", nargs='*', help='package names (android only, e.g. com.example)')
@@ -831,24 +913,24 @@ def main():
         filename = getCleanName(filepath)
         folderpath = getNameWithoutExt(filename) + '/'
         checks = []
-        nameToIdMap = {}
+        nameToIndexMap = {}
         startTime = datetime.now()
         summary = {'Major': 0, 'Normal': 0, 'Minor': 0, 'Info': 0}
 
         if extension == APK:
             platform = ANDROID
-            for id, item in enumerate(ANDROIDCHECKS):
-                nameToIdMap[item] = id
-                check = Check(name=item, tag=CHECKSINFO[item]['tag'], severity=CHECKSINFO[item]['severity'], pattern=CHECKSINFO[item].get('pattern'), found='no', proofs='-', info=CHECKSINFO[item]['info'])
-                checks.append(check)
         else:
             platform = IOS
-            for id, item in enumerate(IOSCHECKS):
-                nameToIdMap[item] = id
-                check = Check(name=item, tag=CHECKSINFO[item]['tag'], severity=CHECKSINFO[item]['severity'], pattern=CHECKSINFO[item].get('pattern'), found='no', proofs='-', info=CHECKSINFO[item]['info'])
-                checks.append(check)
 
-        audit = Audit(startTime=startTime, os=platform, filename=filename, filepath=filepath, folderpath=folderpath, checks=checks, domains=args.domains, packages=args.packages, firebaseDatabaseUrl='-', summary=summary, nameToIdMap=nameToIdMap)
+        index = 0
+        for check in CHECKS:
+            if check['os'] == platform or check['os'] == ALL:
+                nameToIndexMap[check['name']] = index
+                check = Check(id=check['id'], name=check['name'], tag=check['tag'], severity=check['severity'], pattern=check.get('pattern'), found='no', proofs='-', info=check['info'])
+                checks.append(check)
+                index += 1
+
+        audit = Audit(startTime=startTime, os=platform, filename=filename, filepath=filepath, folderpath=folderpath, checks=checks, domains=args.domains, packages=args.packages, firebaseDatabaseUrl='-', summary=summary, nameToIndexMap=nameToIndexMap)
         try:
             if platform is ANDROID:
                 androidAudit(audit)
@@ -858,12 +940,20 @@ def main():
             for check in audit.checks:
                 if check.found == "yes":
                     audit.summary[check.severity] += 1
-            report = getHtmlReport(audit)
 
-            with open(MOUNTDIR + args.output, 'w') as f:
-                f.write(report)
+            if args.format == 'html':
+                report = getHtmlReport(audit)
+            elif args.format == 'sarif':
+                report = getSarifReport(audit)
 
-            if summary['Minor'] or summary['Normal'] or summary['Major']:
+            if args.out == 'file':
+                reportfile = "report." + args.format
+                with open(MOUNTDIR + reportfile, 'w') as f:
+                    f.write(report)
+            elif args.out == 'stdout':
+                print(report)
+
+            if summary['Normal'] or summary['Major']:
                 exit(1)
             else:
                 exit(0)

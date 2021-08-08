@@ -1,4 +1,6 @@
 beautifulsoup4==4.9.3
 Jinja2==2.11.2
+jschema-to-python==1.2.3
 MarkupSafe==1.1.1
+sarif-om==1.0.4
 soupsieve==2.0.1
