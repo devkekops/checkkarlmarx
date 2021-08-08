@@ -22,7 +22,7 @@ $ docker pull devkekops/checkkarlmarx
 $ docker run -v <path_to_apk_or_ipa>:/mount devkekops/checkkarlmarx
 ```
 
-It will generate report.html in ```<path_to_apk_or_ipa>``` folder.
+It will generate ```report.html``` in ```<path_to_apk_or_ipa>``` folder.
 
 Run with options:
 * report format html or sarif (html by default): -f --format
