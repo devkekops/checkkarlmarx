@@ -17,8 +17,8 @@ from jschema_to_python.to_json import to_json
 import pathlib
 from urllib.parse import quote
 
-AAPTPATH = './build-tools/android-10/aapt'
-APKTOOL = 'apktool.jar'
+AAPT = 'aapt'
+APKTOOL = 'apktool'
 MOUNTDIR = '/mount/'
 
 TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
@@ -207,7 +207,8 @@ def iosAudit(audit):
     audit.setTime(auditTime)
 
 def doApktool(filepath, folderpath):
-    subprocess.check_call(['java', '-jar', APKTOOL, 'd', '-f', filepath, '-o', folderpath], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.check_call([APKTOOL, 'd', '-f', filepath, '-o', folderpath], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    #subprocess.check_call(['java', '-jar', APKTOOL, 'd', '-f', filepath, '-o', folderpath], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     #popen = subprocess.Popen(['apktool', 'd', '-f', filepath, '-o', folderpath], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     #popen.wait()
 
@@ -229,7 +230,8 @@ def auditManifest(audit):
         audit.setPackageId(rootAttrs['package'])
 
     #aaptOutput = subprocess.check_output([AAPTPATH, 'dump', 'badging', audit.filepath]).decode()
-    p = subprocess.Popen([AAPTPATH, 'dump', 'badging', audit.filepath], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    #p = subprocess.Popen([AAPTPATH, 'dump', 'badging', audit.filepath], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = subprocess.Popen([AAPT, 'dump', 'badging', audit.filepath], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     aaptOutput = p.communicate()[0].decode()
     version = re.findall('versionName=\'([^\s]+)\'', aaptOutput)[0]
     codeVersion = re.findall('versionCode=\'([^\s]+)\'', aaptOutput)[0]
