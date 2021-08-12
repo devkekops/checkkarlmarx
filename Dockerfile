@@ -8,14 +8,15 @@ RUN apk update \
     && apk add --no-cache curl \
     && apk add --no-cache unzip \
     && apk add --no-cache openjdk8-jre \
+    && apk add --no-cache bash
 
 RUN apk add --no-cache python3 \
     && python3 -m ensurepip \
     && pip3 install --upgrade pip setuptools \
-    && rm -r /usr/lib/python*/ensurepip && \
-    if [ ! -e /usr/bin/pip ]; then ln -s pip3 /usr/bin/pip ; fi && \
-    if [[ ! -e /usr/bin/python ]]; then ln -sf /usr/bin/python3 /usr/bin/python; fi && \
-    rm -r /root/.cache
+    && rm -r /usr/lib/python*/ensurepip \
+    && if [ ! -e /usr/bin/pip ]; then ln -s pip3 /usr/bin/pip ; fi \
+    && if [[ ! -e /usr/bin/python ]]; then ln -sf /usr/bin/python3 /usr/bin/python; fi \
+    && rm -r /root/.cache
 
 RUN curl -L -o /usr/local/bin/apktool.jar https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.5.0.jar \
     && curl -L -o /usr/local/bin/apktool https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool \
