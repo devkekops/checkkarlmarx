@@ -57,7 +57,7 @@ optional arguments:
 
 Example:
 ```sh
-$ docker run -v $(pwd):/mount devkekops/checkkarlmarx /mount -- sarif --stdout -d mycompany.com -q qa test dev stage -p com.mycompany com.example
+$ docker run -v $(pwd):/mount devkekops/checkkarlmarx /mount --sarif --stdout -d mycompany.com -q qa test dev stage -p com.mycompany com.example
 ```
 
 Exit codes:
