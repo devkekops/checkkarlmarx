@@ -19,7 +19,6 @@ from urllib.parse import quote
 
 AAPT = 'aapt'
 APKTOOL = 'apktool'
-MOUNTDIR = '/mount/'
 
 TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -58,6 +57,8 @@ IOSBLACKLISTURLS = [b'www.apple.com', b'ocsp.apple.com', b'crl.apple.com', b'ocs
 BASICAUTH = r'^(?:.+?\/\/)(?:.+?):(?:.+?)@(?:.+)$'
 QATAGS = ['qa', 'test', 'dev', 'uat', 'stage']
 
+BASICTOKEN = rb'Basic\s(?:[A-Za-z0-9+/]{4})+(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?'
+BEARERTOKEN = rb'Bearer\s[A-Za-z0-9\-\._~\+\/]+=*'
 PRIVATEKEY = b'-----BEGIN (?:EC|PGP|DSA|RSA|OPENSSH)? ?PRIVATE KEY ?(?:BLOCK)?-----'
 FCMSERVERKEY = rb'AAAA[A-Za-z0-9_-]{7}:[A-Za-z0-9_-]{140}'
 GOOGLEAPIKEY = rb'AIzaSy[0-9A-Za-z_-]{33}'
@@ -89,17 +90,19 @@ CHECKS = [{'id': '0', 'name': 'NSC CustomTrustedCAs', 'os': 'android', 'tag': 'n
           {'id': '14', 'name': 'WS Insecure URLs', 'os': 'all', 'tag': 'urls', 'severity': 'Minor', 'info': 'WebSocket URLs starts with ws://'},
           {'id': '15', 'name': 'QA URLs', 'os': 'all', 'tag': 'urls', 'severity': 'Minor', 'info': 'Http and WebSocket URLs contains qa tags (e.g. qa, test, dev, uat, stage)'},
 
-          {'id': '16', 'name': 'Private Keys', 'os': 'all', 'tag': 'keys', 'severity': 'Major', 'pattern': PRIVATEKEY, 'info': 'Asymmetric Private RSA/EC/DSA/PGP/OPENSSH Keys'},
-          {'id': '17', 'name': 'FCM Server Key', 'os': 'all', 'tag': 'keys', 'severity': 'Major', 'pattern': FCMSERVERKEY, 'info': 'Authorization key for FCM SDK: <a target="blank" href="https://abss.me/posts/fcm-takeover/">Firebase Cloud Messaging Service Takeover</a>'}, #example: AAAAODDc_Do:APA91bG5kQSzauxg1GSrq3eot5GUPyfouZ5KZObtBUpdM0xoxWGCulSPK1FIKan3IIBK-YlrkOcXkIo0kv7NlUFSOV54Qdy21z9czkFBoe6dMxBEEKAAD8KlC3LYuDugRdrMXJr1ggsL
-          {'id': '18','name': 'Google Api Key', 'os': 'all', 'tag': 'keys', 'severity': 'Info', 'pattern': GOOGLEAPIKEY, 'info': 'Google API Key, Legacy FCM server Key: <a target="blank" href="https://abss.me/posts/fcm-takeover/">Firebase Cloud Messaging Service Takeover</a>'}, #example: AIzaSyDIw1n6tfz8_ANZVXJLRuBQrX-7culIFHM
+          {'id': '16', 'name': 'Basic Token', 'os': 'all', 'tag': 'keys', 'severity': 'Major', 'pattern': BASICTOKEN, 'info': 'Token for basic authentication (i.e. "Basic token_value")'},
+          {'id': '17', 'name': 'Bearer Token', 'os': 'all', 'tag': 'keys', 'severity': 'Major', 'pattern': BEARERTOKEN, 'info': 'Token for bearer authentication (i.e. "Bearer token_value")'},
+          {'id': '18', 'name': 'Private Keys', 'os': 'all', 'tag': 'keys', 'severity': 'Major', 'pattern': PRIVATEKEY, 'info': 'Asymmetric Private RSA/EC/DSA/PGP/OPENSSH Keys'},
+          {'id': '19', 'name': 'FCM Server Key', 'os': 'all', 'tag': 'keys', 'severity': 'Major', 'pattern': FCMSERVERKEY, 'info': 'Authorization key for FCM SDK: <a target="blank" href="https://abss.me/posts/fcm-takeover/">Firebase Cloud Messaging Service Takeover</a>'}, #example: AAAAODDc_Do:APA91bG5kQSzauxg1GSrq3eot5GUPyfouZ5KZObtBUpdM0xoxWGCulSPK1FIKan3IIBK-YlrkOcXkIo0kv7NlUFSOV54Qdy21z9czkFBoe6dMxBEEKAAD8KlC3LYuDugRdrMXJr1ggsL
+          {'id': '20','name': 'Google Api Key', 'os': 'all', 'tag': 'keys', 'severity': 'Info', 'pattern': GOOGLEAPIKEY, 'info': 'Google API Key, Legacy FCM server Key: <a target="blank" href="https://abss.me/posts/fcm-takeover/">Firebase Cloud Messaging Service Takeover</a>'}, #example: AIzaSyDIw1n6tfz8_ANZVXJLRuBQrX-7culIFHM
 
-          {'id': '19', 'name': 'Should Override Url Loadings', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': SHOULDOVERRIDEURLLOADING, 'info': 'Allow open 3rd party links in WebView instead of browser:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebViewClient#shouldOverrideUrlLoading(android.webkit.WebView,%20android.webkit.WebResourceRequest)">shouldOverrideUrlLoading</a>'},
-          {'id': '20', 'name': 'Set JavaScript Enabled', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': SETJAVASCRIPTENABLED, 'info': 'Tells the WebView to enable JavaScript execution:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebSettings#setJavaScriptEnabled(boolean)">setJavascriptEnabled</a>'},
-          {'id': '21', 'name': 'Set Allow File Access', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': SETALLOWFILEACCESS, 'info': 'Enables or disables file access within WebView:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebSettings#setAllowFileAccess(boolean)">setAllowFileAccess</a>'},
-          {'id': '22', 'name': 'Set Allow Content Access', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': SETALLOWCONTENTACCESS, 'info': 'Enables or disables content URL access within WebView:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebSettings#setAllowContentAccess(boolean)">setAllowContentAccess</a>'},
-          {'id': '23', 'name': 'Set Allow File Access From File URLs', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': SETALLOWFILEACCESSFROMFILEURLS, 'info': 'Sets whether cross-origin requests in the context of a file scheme URL should be allowed to access content from other file scheme URLs:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebSettings#setAllowFileAccessFromFileURLs(boolean)">setAllowFileAccessFromFileURLs</a>'},
-          {'id': '24', 'name': 'Set Allow Universal Access From File URLs', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': SETALLOWUNIVERSALACCESSFORMFILEURLS, 'info': 'Sets whether cross-origin requests in the context of a file scheme URL should be allowed to access content from any origin:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebSettings#setAllowUniversalAccessFromFileURLs(boolean)">setAllowUniversalAccessFromFileURLs</a>'},
-          {'id': '25', 'name': 'Add Javascript Interface', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': ADDJAVASCRIPTINTERFACE, 'info': 'Injects the supplied Java object into this WebView:\n<a target="blank" href="https://developer.android.com/reference/android/webkit/WebView#addJavascriptInterface(java.lang.Object,%20java.lang.String)">addJavascriptInterface</a>'}
+          {'id': '21', 'name': 'Should Override Url Loadings', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': SHOULDOVERRIDEURLLOADING, 'info': 'Allow open 3rd party links in WebView instead of browser:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebViewClient#shouldOverrideUrlLoading(android.webkit.WebView,%20android.webkit.WebResourceRequest)">shouldOverrideUrlLoading</a>'},
+          {'id': '22', 'name': 'Set JavaScript Enabled', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': SETJAVASCRIPTENABLED, 'info': 'Tells the WebView to enable JavaScript execution:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebSettings#setJavaScriptEnabled(boolean)">setJavascriptEnabled</a>'},
+          {'id': '23', 'name': 'Set Allow File Access', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': SETALLOWFILEACCESS, 'info': 'Enables or disables file access within WebView:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebSettings#setAllowFileAccess(boolean)">setAllowFileAccess</a>'},
+          {'id': '24', 'name': 'Set Allow Content Access', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': SETALLOWCONTENTACCESS, 'info': 'Enables or disables content URL access within WebView:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebSettings#setAllowContentAccess(boolean)">setAllowContentAccess</a>'},
+          {'id': '25', 'name': 'Set Allow File Access From File URLs', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': SETALLOWFILEACCESSFROMFILEURLS, 'info': 'Sets whether cross-origin requests in the context of a file scheme URL should be allowed to access content from other file scheme URLs:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebSettings#setAllowFileAccessFromFileURLs(boolean)">setAllowFileAccessFromFileURLs</a>'},
+          {'id': '26', 'name': 'Set Allow Universal Access From File URLs', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': SETALLOWUNIVERSALACCESSFORMFILEURLS, 'info': 'Sets whether cross-origin requests in the context of a file scheme URL should be allowed to access content from any origin:\n<a target="_blank" href = "https://developer.android.com/reference/android/webkit/WebSettings#setAllowUniversalAccessFromFileURLs(boolean)">setAllowUniversalAccessFromFileURLs</a>'},
+          {'id': '27', 'name': 'Add Javascript Interface', 'os': 'android', 'tag': 'webview', 'severity': 'Info', 'pattern': ADDJAVASCRIPTINTERFACE, 'info': 'Injects the supplied Java object into this WebView:\n<a target="blank" href="https://developer.android.com/reference/android/webkit/WebView#addJavascriptInterface(java.lang.Object,%20java.lang.String)">addJavascriptInterface</a>'}
               ]
 
 class Audit:
@@ -821,38 +824,42 @@ def add_results(audit, run):
         if check.found == 'yes':
             if check.tag == 'network':
                 if audit.os == ANDROID:
-                    result = create_result(check.id, check.name, check.severity, check.info, list(check.proofs[1].keys())[0], list(check.proofs[1].values())[0][0], rules, rule_indices)
+                    result = create_result(check.id, check.name, check.severity, check.info, list(check.proofs[1].keys())[0], list(check.proofs[1].values())[0], rules, rule_indices)
                 else:
-                    result = create_result(check.id, check.name, check.severity, check.info, list(check.proofs.keys())[0], list(check.proofs.values())[0][0], rules, rule_indices)
+                    result = create_result(check.id, check.name, check.severity, check.info, list(check.proofs.keys())[0], list(check.proofs.values())[0], rules, rule_indices)
                 run.results.append(result)
             else:
                 for key, value in check.proofs.items():
-                    for location in value:
-                        result = create_result(check.id, check.name, check.severity, check.info, key, location, rules, rule_indices)
-                        run.results.append(result)
+                    result = create_result(check.id, check.name, check.severity, check.info, key, value, rules, rule_indices)
+                    run.results.append(result)
 
     if len(rules) > 0:
         run.tool.driver.rules = list(
             rules.values()
         )
 
-def create_result(checkId, checkName, checkSeverity, checkInfo, key, location, rules, rule_indices):
+def create_result(checkId, checkName, checkSeverity, checkInfo, key, value, rules, rule_indices):
+    locations = []
+
     rule, rule_index = create_or_find_rule(checkId, checkName, rules, rule_indices)
 
-    physical_location = om.PhysicalLocation(
-        artifact_location=om.ArtifactLocation(uri=to_uri(location.split(':')[0]))
-    )
+    for v in value:
+        physical_location = om.PhysicalLocation(
+            artifact_location=om.ArtifactLocation(uri=to_uri(v.split(':')[0]))
+        )
 
-    physical_location.region = om.Region(
-        start_line=int(location.split(':')[1]), snippet=om.ArtifactContent(text=key)
-    )
+        physical_location.region = om.Region(
+            start_line=int(v.split(':')[1]), snippet=om.ArtifactContent(text=key)
+        )
+
+        locations.append(om.Location(physical_location=physical_location))
 
     return om.Result(
         rule_id=checkId,
         rule_index=rule_index,
         message=om.Message(text=checkInfo),
         level=level_from_severity(checkSeverity),
-        locations=[om.Location(physical_location=physical_location)],
+        locations=locations,
     )
 
 def create_or_find_rule(checkId, checkName, rules, rule_indices):
@@ -887,12 +894,26 @@ def level_from_severity(severity):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-f", "--format", nargs='?', default="html", const="html", choices=['html', 'sarif'], help="report format: html or sarif")
-    parser.add_argument("-o", "--out", nargs='?', default="file", const="file", choices=['file', 'stdout'], help="print output to: file or stdout")
+    parser.add_argument("path", nargs=1, help='path to apk/ipa')
+
+    fgroup = parser.add_mutually_exclusive_group()
+    fgroup.add_argument("--html", help="set report format as html", action='store_true')
+    fgroup.add_argument("--sarif", help="set report format as sarif", action='store_true')
+
+    pgroup = parser.add_mutually_exclusive_group()
+    pgroup.add_argument("--file", help="print report to file", action='store_true')
+    pgroup.add_argument("--stdout", help="print report to stdout", action='store_true')
+
+    parser.add_argument("-o", "--output", nargs='?', help="report filename")
+
     parser.add_argument("-d", "--domains", nargs='*', help="domain list (e.g. example.com)")
     parser.add_argument("-q", "--qatags", nargs='*', help="test domain tags list")
     parser.add_argument("-p", "--packages", nargs='*', help='package names (android only, e.g. com.example)')
     args = parser.parse_args()
+
+    mountdir = args.path[0]
+    if mountdir[-1] != '/':
+        mountdir += '/'
 
     if args.qatags:
         global QATAGS
@@ -904,13 +925,13 @@ def main():
 
     filepath = ''
 
-    for file in os.listdir(MOUNTDIR):
+    for file in os.listdir(mountdir):
         if getExtension(file) in ALLOWED_EXTS:
             filepath = file
             break
 
     if filepath:
-        filepath = MOUNTDIR + filepath
+        filepath = mountdir + filepath
         extension = getExtension(filepath)
         filename = getCleanName(filepath)
         folderpath = getNameWithoutExt(filename) + '/'
@@ -943,17 +964,22 @@ def main():
                 if check.found == "yes":
                     audit.summary[check.severity] += 1
 
-            if args.format == 'html':
-                report = getHtmlReport(audit)
-            elif args.format == 'sarif':
+            if args.sarif:
                 report = getSarifReport(audit)
+                format = 'sarif'
+            else:
+                report = getHtmlReport(audit)
+                format = 'html'
 
-            if args.out == 'file':
-                reportfile = "report." + args.format
-                with open(MOUNTDIR + reportfile, 'w') as f:
-                    f.write(report)
-            elif args.out == 'stdout':
+            if args.stdout:
                 print(report)
+            else:
+                if args.output:
+                    reportfile = args.output
+                else:
+                    reportfile = "report." + format
+                with open(mountdir + reportfile, 'w') as f:
+                    f.write(report)
 
             if summary['Normal'] or summary['Major']:
                 exit(1)
