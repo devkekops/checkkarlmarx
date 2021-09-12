@@ -990,7 +990,7 @@ def main():
             print(e)
             exit(2)
     else:
-        print("There is no apk or ipa file in /mount folder")
+        print("There is no apk or ipa file in " + mountdir + " folder")
         exit(2)
 
 if __name__ == "__main__":
