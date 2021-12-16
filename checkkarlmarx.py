@@ -236,8 +236,8 @@ def auditManifest(audit):
     #p = subprocess.Popen([AAPTPATH, 'dump', 'badging', audit.filepath], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     p = subprocess.Popen([AAPT, 'dump', 'badging', audit.filepath], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     aaptOutput = p.communicate()[0].decode()
-    version = re.findall('versionName=\'([^\s]+)\'', aaptOutput)[0]
-    codeVersion = re.findall('versionCode=\'([^\s]+)\'', aaptOutput)[0]
+    version = re.search('versionName=\'([^\s]+)\'', aaptOutput)
+    codeVersion = re.search('versionCode=\'([^\s]+)\'', aaptOutput)
     if version:
         audit.setPackageVersion(version)
     if codeVersion:
@@ -273,11 +273,12 @@ def auditManifest(audit):
 
     appMetaDatas = app.findall('meta-data')
     disableSafeBrowsing = False
-    for appMetaData in appMetaDatas:
-        if appMetaData.attrib['{http://schemas.android.com/apk/res/android}name'] == 'android.webkit.WebView.EnableSafeBrowsing':
-            if appMetaData.attrib['{http://schemas.android.com/apk/res/android}value'] == 'false':
-                disableSafeBrowsing = True
-                break
+    if appMetaDatas:
+        for appMetaData in appMetaDatas:
+            if appMetaData.attrib['{http://schemas.android.com/apk/res/android}name'] == 'android.webkit.WebView.EnableSafeBrowsing':
+                if appMetaData.attrib['{http://schemas.android.com/apk/res/android}value'] == 'false':
+                    disableSafeBrowsing = True
+                    break
 
     if disableSafeBrowsing:
         disableSafeBrowsingEntry = grepBinary(manifestpath, DISABLESAFEBROWSING)
